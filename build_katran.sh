@@ -80,7 +80,7 @@ if [ -n "$BUILD_EXAMPLE_THRIFT" ]; then
     export CMAKE_BUILD_EXAMPLE_THRIFT="$BUILD_EXAMPLE_THRIFT"
 fi
 
-if [ -z "$BUILD_EXAMPLE_GRPC" ]; then
+if [ -n "$BUILD_EXAMPLE_GRPC" ]; then
     BUILD_EXAMPLE_GRPC=1
     export CMAKE_BUILD_EXAMPLE_GRPC="$BUILD_EXAMPLE_GRPC"
 fi
@@ -192,6 +192,70 @@ get_gflags() {
     touch "${DEPS_DIR}/gflags_installed"
 }
 
+get_glog() {
+    if [ ! -f /etc/redhat-release ]; then
+        # not needed on ubuntu as it is available as a package
+        return
+    fi
+
+    if [ -f "${DEPS_DIR}/glog_installed" ]; then
+        return
+    fi
+    GLOG_DIR=$DEPS_DIR/glog
+    GLOG_BUILD_DIR=$DEPS_DIR/glog/_build
+    rm -rf "$GLOG_DIR"
+    pushd .
+    echo -e "${COLOR_GREEN}[ INFO ] Cloning glog repo ${COLOR_OFF}"
+    git clone https://github.com/google/glog --depth 1 --branch v0.4.0 "$GLOG_DIR"
+    echo -e "${COLOR_GREEN}[ INFO ] Building glog ${COLOR_OFF}"
+    mkdir -p "$GLOG_BUILD_DIR"
+    cd "$GLOG_BUILD_DIR" || exit
+
+    cmake  -DCXX_STD=gnu++17                        \
+      -DCMAKE_BUILD_TYPE=RelWithDebInfo             \
+      -DCMAKE_PREFIX_PATH="$INSTALL_DIR"            \
+      -DCMAKE_INSTALL_PREFIX="$INSTALL_DIR"         \
+      ..
+
+    make -j "$NCPUS"
+    make install
+    echo -e "${COLOR_GREEN}Glog is installed ${COLOR_OFF}"
+    popd
+    touch "${DEPS_DIR}/glog_installed"
+}
+
+get_boost() {
+    if [ -f "${DEPS_DIR}/boost_installed" ]; then
+        return
+    fi
+
+    if [ ! -f /etc/redhat-release ]; then
+        # not needed on ubuntu as it is available as a package
+        return
+    else
+        BOOST_DIR=$DEPS_DIR/boost
+        rm -rf "$BOOST_DIR"
+        pushd .
+        mkdir -p "$BOOST_DIR"
+        cd "$BOOST_DIR"
+        echo -e "${COLOR_GREEN}[ INFO ] Downloading Boost ${COLOR_OFF}"
+        wget https://dl.bintray.com/boostorg/release/1.69.0/source/boost_1_69_0.tar.bz2
+        tar xf ./boost_1_69_0.tar.bz2 --strip-components=1
+        ./bootstrap.sh
+        ./b2 -j "$NCPUS"            \
+            --with-context          \
+            --with-filesystem       \
+            --with-program_options  \
+            --with-regex            \
+            --with-system           \
+            --with-thread           \
+            install
+        echo -e "${COLOR_GREEN}Boost is installed ${COLOR_OFF}"
+        popd
+    fi
+    touch "${DEPS_DIR}/boost_installed"
+}
+
 get_folly() {
     if [ -f "${DEPS_DIR}/folly_installed" ]; then
         return
@@ -202,17 +266,13 @@ get_folly() {
     rm -rf "$FOLLY_DIR"
     if [ -f /etc/redhat-release ]; then
         sudo yum install -y \
-            boost-devel \
-            boost-static \
             lz4-devel \
             xz-devel \
             snappy-devel \
             zlib-devel \
             zlib-static \
-            glog-devel \
             python3-scons \
             double-conversion-devel \
-            openssl-devel \
             libdwarf-devel \
             elfutils-devel elfutils-devel-static \
             libunwind-devel \
@@ -521,6 +581,8 @@ get_grpc() {
       -DgRPC_BUILD_GRPC_OBJECTIVE_C_PLUGIN=OFF      \
       -DgRPC_BUILD_GRPC_PHP_PLUGIN=OFF              \
       -DgRPC_BUILD_GRPC_RUBY_PLUGIN=OFF             \
+      -DgRPC_ZLIB_PROVIDER=package                  \
+      -DgRPC_SSL_PROVIDER=package                   \
       ..
 
     make -j "$NCPUS"
@@ -596,13 +658,15 @@ test_katran() {
     popd
 }
 
-get_dev_tools
+#get_dev_tools
 get_required_libs
 get_libevent
 get_fmt
 get_gflags
+get_glog
+#get_boost
 get_folly
-get_clang
+#get_clang
 get_gtest
 get_libbpf
 if [ "$BUILD_EXAMPLE_THRIFT" -eq 1 ]; then

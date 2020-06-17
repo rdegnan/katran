@@ -15,7 +15,7 @@
 
 include(CTest)
 if(BUILD_TESTS)
-  find_library(BOOST_SYSTEM libboost_system.a boost_system)
+  find_package(Boost REQUIRED COMPONENTS system)
   find_package(FOLLY CONFIG REQUIRED)
   find_library(GTEST gtest)
   find_path(GTEST_INCLUDE_DIR gtest)
